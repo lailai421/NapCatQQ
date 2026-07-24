@@ -41,12 +41,12 @@ the rest conversationally.
 - [ ] Fill guidelines for napcat-schema
 - [ ] Fill guidelines for napcat-shell
 - [ ] Fill guidelines for napcat-shell-loader
-- [ ] Fill guidelines for napcat-test
+- [x] Fill guidelines for napcat-test
 - [ ] Fill guidelines for napcat-types
 - [ ] Fill guidelines for napcat-universal
 - [ ] Fill guidelines for napcat-vite
-- [ ] Fill guidelines for napcat-webui-backend
-- [ ] Fill guidelines for napcat-webui-frontend
+- [x] Fill guidelines for napcat-webui-backend
+- [x] Fill guidelines for napcat-webui-frontend
 - [ ] Add code examples
 
 ---
