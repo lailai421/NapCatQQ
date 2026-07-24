@@ -1,1 +1,2 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/napcat-core/frontend/index.md", "reason": "napcat-core 包规范，用于质量检查时的约定参考"}
+{"file": ".trellis/spec/guides/index.md", "reason": "共享思考指南，用于质量检查时的边界条件思考"}

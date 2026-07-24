@@ -3,7 +3,7 @@
   "name": "qidian-phase0-verify",
   "title": "企点适配 Phase 0：运行时验证",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": "napcat-core",
