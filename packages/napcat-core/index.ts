@@ -27,7 +27,7 @@ import fs from 'node:fs';
 import { hostname, systemName, systemVersion } from 'napcat-common/src/system';
 import { NTEventWrapper } from '@/napcat-core/helper/event';
 import { createSessionProxy } from '@/napcat-core/helper/session-proxy';
-import { KickedOffLineInfo, RawMessage, SelfInfo, SelfStatusInfo } from '@/napcat-core/types';
+import { ChatType, KickedOffLineInfo, RawMessage, SelfInfo, SelfStatusInfo } from '@/napcat-core/types';
 import { NapCatConfigLoader, NapcatConfigSchema } from '@/napcat-core/helper/config';
 import os from 'node:os';
 import { NodeIKernelMsgListener, NodeIKernelProfileListener } from '@/napcat-core/listeners';
@@ -58,6 +58,24 @@ export enum NapCatCoreWorkingEnv {
   Shell = 1,
   Framework = 2,
 }
+
+const QIDIAN_PROBE_METHODS = [
+  'addKernelQiDianListener',
+  'removeKernelQiDianListener',
+  'requestWpaSigT',
+  'requestQidianUidFromUin',
+  'requestExtUinForRemoteControl',
+  'requestMainUinForRemoteControl',
+  'requestNaviConfig',
+  'requestWpaCorpInfo',
+  'requestWpaUserInfo',
+  'isNull',
+] as const;
+
+const QIDIAN_PROBE_CHAT_TYPES = new Set<ChatType>([
+  ChatType.KCHATTYPETEMPBUSSINESSCRM,
+  ChatType.KCHATTYPETEMPWPA,
+]);
 
 export function loadQQWrapper (execPath: string | undefined, QQVersion: string): WrapperNodeApi {
   if (process.env['NAPCAT_WRAPPER_PATH']) {
@@ -216,6 +234,55 @@ export class NapCatCore {
       this.configLoader.configData.fileLogLevel as LogLevel,
       this.configLoader.configData.consoleLogLevel as LogLevel
     );
+
+    if (this.isQiDianProbeEnabled()) {
+      this.logQiDianServiceProbe();
+    }
+  }
+
+  private isQiDianProbeEnabled (): boolean {
+    return process.env['NAPCAT_QIDIAN_PROBE'] === '1';
+  }
+
+  private logQiDianServiceProbe () {
+    try {
+      const session = this.context.session as unknown as {
+        getQiDianService?: () => unknown;
+      };
+      const service = session.getQiDianService?.();
+      const serviceRecord = service as Record<string, unknown> | undefined;
+      const isNull = typeof serviceRecord?.['isNull'] === 'function'
+        ? (serviceRecord['isNull'] as () => boolean).call(service)
+        : undefined;
+
+      this.context.logger.log('[QiDianProbe] service', {
+        exists: !!service,
+        isNull,
+        methods: QIDIAN_PROBE_METHODS.filter(method => typeof serviceRecord?.[method] === 'function'),
+      });
+    } catch (e) {
+      this.context.logger.logError('[QiDianProbe] service 检测失败', e);
+    }
+  }
+
+  private logQiDianMessageProbe (source: string, msg: RawMessage) {
+    if (!this.isQiDianProbeEnabled() || !QIDIAN_PROBE_CHAT_TYPES.has(msg.chatType)) {
+      return;
+    }
+
+    this.context.logger.log('[QiDianProbe] message', {
+      source,
+      chatType: msg.chatType,
+      peerUid: msg.peerUid,
+      peerUin: msg.peerUin,
+      peerName: msg.peerName,
+      senderUid: msg.senderUid,
+      senderUin: msg.senderUin,
+      msgId: msg.msgId,
+      msgSeq: msg.msgSeq,
+      msgTime: msg.msgTime,
+      elementTypes: msg.elements.map(element => element.elementType),
+    });
   }
 
   get dataPath (): string {
@@ -233,7 +300,10 @@ export class NapCatCore {
 
     // 在线文件/文件夹消息
     msgListener.onRecvOnlineFileMsg = (msgs: RawMessage[]) => {
-      msgs.forEach(msg => this.context.logger.logMessage(msg, this.selfInfo));
+      msgs.forEach(msg => {
+        this.logQiDianMessageProbe('recv_online_file', msg);
+        this.context.logger.logMessage(msg, this.selfInfo);
+      });
     };
 
     msgListener.onKickedOffLine = (Info: KickedOffLineInfo) => {
@@ -244,9 +314,13 @@ export class NapCatCore {
       this.event.emit('KickedOffLine', tips);
     };
     msgListener.onRecvMsg = (msgs) => {
-      msgs.forEach(msg => this.context.logger.logMessage(msg, this.selfInfo));
+      msgs.forEach(msg => {
+        this.logQiDianMessageProbe('recv', msg);
+        this.context.logger.logMessage(msg, this.selfInfo);
+      });
     };
     msgListener.onAddSendMsg = (msg) => {
+      this.logQiDianMessageProbe('send', msg);
       this.context.logger.logMessage(msg, this.selfInfo);
     };
     this.context.session.getMsgService().addKernelMsgListener(
