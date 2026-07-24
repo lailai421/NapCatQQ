@@ -1,51 +1,147 @@
-# Quality Guidelines
+# Test Guidelines
 
-> Code quality standards for frontend development.
-
----
-
-## Overview
-
-<!--
-Document your project's quality standards here.
-
-Questions to answer:
-- What patterns are forbidden?
-- What linting rules do you enforce?
-- What are your testing requirements?
-- What code review standards apply?
--->
-
-(To be filled by the team)
+> Real test conventions from `packages/napcat-test/`.
 
 ---
 
-## Forbidden Patterns
+## Test Framework
 
-<!-- Patterns that should never be used and why -->
+**vitest** with TypeScript. Config at `packages/napcat-test/vitest.config.ts`:
 
-(To be filled by the team)
+```ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+    globals: true,
+  },
+  resolve: {
+    alias: {
+      '@/napcat-rpc': resolve(__dirname, '../napcat-rpc'),
+      '@/napcat-core': resolve(__dirname, '../napcat-core'),
+      // ... cross-package path aliases
+    },
+  },
+});
+```
 
 ---
 
-## Required Patterns
+## Test File Structure
 
-<!-- Patterns that must always be used -->
+All test files live in `packages/napcat-test/`:
 
-(To be filled by the team)
+```
+napcat-test/
+  schema.test.ts
+  rpc.test.ts
+  imageSize.test.ts
+  groupTodoTransformer.test.ts
+  sha1Stream.test.ts
+  vitest.config.ts
+```
+
+Each `.test.ts` imports from the package under test via `@/` path aliases.
 
 ---
 
-## Testing Requirements
+## Test Pattern: describe / it / expect
 
-<!-- What level of testing is expected -->
+Standard vitest BDD style:
 
-(To be filled by the team)
+```ts
+// packages/napcat-test/schema.test.ts
+import { describe, expect, test } from 'vitest';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
+
+describe('NapCat Schemas Compilation', () => {
+  test('should compile OB11MessageDataSchema without duplicate id error', () => {
+    expect(() => TypeCompiler.Compile(OB11MessageDataSchema)).not.toThrow();
+  });
+});
+```
 
 ---
 
-## Code Review Checklist
+## Schema & Config Validation Tests
 
-<!-- What reviewers should check -->
+Schema tests use `@sinclair/typebox` for JSON Schema compilation and validation:
 
-(To be filled by the team)
+```ts
+// Compilation check
+expect(() => TypeCompiler.Compile(MySchema)).not.toThrow();
+
+// Coercion + validation
+let data: unknown = structuredClone(payload);
+data = Value.Parse(MySchema, data);
+const compiler = TypeCompiler.Compile(MySchema);
+expect(compiler.Check(data)).toBe(true);
+
+// Config defaults
+expect(loaded.network.httpServers[0]?.host).toBe('127.0.0.1');
+```
+
+---
+
+## Mock Pattern: vi.fn()
+
+```ts
+// packages/napcat-test/rpc.test.ts
+import { vi } from 'vitest';
+
+const callback = vi.fn(async (x: number) => x * 3);
+const result = await proxy.asyncWithCallback(callback);
+
+expect(callback).toHaveBeenCalledWith(5);
+expect(result).toBe(115);
+```
+
+---
+
+## Unit Test Pattern (Pure Functions)
+
+For modules like image-size:
+
+```ts
+// packages/napcat-test/imageSize.test.ts
+import { describe, it, expect } from 'vitest';
+import { detectImageTypeFromBuffer, ImageType } from '@/napcat-image-size/src';
+
+describe('detectImageTypeFromBuffer', () => {
+  it('should detect PNG image type', () => {
+    expect(detectImageTypeFromBuffer(testBuffers.png)).toBe(ImageType.PNG);
+  });
+
+  it('should return UNKNOWN for empty buffer', () => {
+    expect(detectImageTypeFromBuffer(testBuffers.empty)).toBe(ImageType.UNKNOWN);
+  });
+});
+```
+
+---
+
+## Integration Test Pattern (RPC)
+
+For multi-layer RPC tests that test proxy ↔ server communication:
+
+```ts
+const { client, server } = createRpcPair({
+  counter: 0,
+  increment() { return ++this.counter; },
+});
+
+expect(await client.increment()).toBe(1);
+expect(server.counter).toBe(2);
+```
+
+---
+
+## Running Tests
+
+```bash
+pnpm test        # runs vitest
+pnpm test:ui     # vitest UI mode
+```
+
+No coverage thresholds configured currently.
